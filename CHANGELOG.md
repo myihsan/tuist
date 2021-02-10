@@ -11,6 +11,10 @@ Please, check out guidelines: https://keepachangelog.com/en/1.0.0/
 - Expose `ResourceFileElements` initializer [#2541](https://github.com/tuist/tuist/pull/2541) by [@kwridan](https://github.com/kwridan).
     - Note: This fixes an issue where `ResourceFileElements` could not be created using variables within helpers
     
+### Changed
+
+- When enabling code coverage, tests targets such as `TestMyFrameworkA` gather coverage for all targets instead of only `TestMyFrameworkA` [#2501](https://github.com/tuist/tuist/pull/2501) by [@adellibovi](https://github.com/adellibovi)
+
 ## 1.35.0 - Miracle
 
 - Fix missing linkable products for static frameworks with transitive precompiled dependencies [#2500](https://github.com/tuist/tuist/pull/2500) by [@kwridan](https://github.com/kwridan).
