@@ -8,7 +8,7 @@ import TuistGraphTesting
 @testable import TuistKit
 
 final class MockProjectEditorMapper: ProjectEditorMapping {
-    var mapStub: (Project, Graph)?
+    var mapStub: ([Project], Graph)?
     var mapArgs: [(
         tuistPath: AbsolutePath,
         sourceRootPath: AbsolutePath,
@@ -16,7 +16,8 @@ final class MockProjectEditorMapper: ProjectEditorMapping {
         setupPath: AbsolutePath?,
         configPath: AbsolutePath?,
         dependenciesPath: AbsolutePath?,
-        manifests: [AbsolutePath],
+        projectManifests: [AbsolutePath],
+        pluginManifests: [AbsolutePath],
         helpers: [AbsolutePath],
         templates: [AbsolutePath],
         projectDescriptionPath: AbsolutePath
@@ -28,10 +29,11 @@ final class MockProjectEditorMapper: ProjectEditorMapping {
              setupPath: AbsolutePath?,
              configPath: AbsolutePath?,
              dependenciesPath: AbsolutePath?,
-             manifests: [AbsolutePath],
+             projectManifests: [AbsolutePath],
+             pluginManifests: [AbsolutePath],
              helpers: [AbsolutePath],
              templates: [AbsolutePath],
-             projectDescriptionPath: AbsolutePath) -> (Project, Graph)
+             projectDescriptionPath: AbsolutePath) -> ([Project], Graph)
     {
         mapArgs.append((tuistPath: tuistPath,
                         sourceRootPath: sourceRootPath,
@@ -39,11 +41,12 @@ final class MockProjectEditorMapper: ProjectEditorMapping {
                         setupPath: setupPath,
                         configPath: configPath,
                         dependenciesPath: dependenciesPath,
-                        manifests: manifests,
+                        projectManifests: projectManifests,
+                        pluginManifests: pluginManifests,
                         helpers: helpers,
                         templates: templates,
                         projectDescriptionPath: projectDescriptionPath))
         if let mapStub = mapStub { return mapStub }
-        return (Project.test(), Graph.test())
+        return ([Project.test()], Graph.test())
     }
 }

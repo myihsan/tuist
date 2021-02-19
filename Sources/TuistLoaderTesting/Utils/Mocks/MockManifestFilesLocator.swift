@@ -5,7 +5,9 @@ import TSCBasic
 public final class MockManifestFilesLocator: ManifestFilesLocating {
     public var locateProjectManifestsStub: [(Manifest, AbsolutePath)]?
     public var locateProjectManifestsArgs: [AbsolutePath] = []
-    public var locateAllProjectManifestsStubs: [(Manifest, AbsolutePath)]?
+    public var locatePluginManifestsStub: [AbsolutePath]?
+    public var locatePluginManifestsArgs: [AbsolutePath] = []
+    public var locateProjectManifestsStubs: [(Manifest, AbsolutePath)]?
     public var locateAllProjectManifestsArgs: [AbsolutePath] = []
     public var locateConfigStub: AbsolutePath?
     public var locateConfigArgs: [AbsolutePath] = []
@@ -16,14 +18,19 @@ public final class MockManifestFilesLocator: ManifestFilesLocating {
 
     public init() {}
 
-    public func locateProjectManifests(at: AbsolutePath) -> [(Manifest, AbsolutePath)] {
+    public func locateManifests(at: AbsolutePath) -> [(Manifest, AbsolutePath)] {
         locateProjectManifestsArgs.append(at)
         return locateProjectManifestsStub ?? [(.project, at.appending(component: "Project.swift"))]
     }
 
-    public func locateAllProjectManifests(at: AbsolutePath) -> [(Manifest, AbsolutePath)] {
+    public func locatePluginManifests(at: AbsolutePath) -> [AbsolutePath] {
+        locatePluginManifestsArgs.append(at)
+        return locatePluginManifestsStub ?? [at.appending(component: "Plugin.swift")]
+    }
+
+    public func locateProjectManifests(at: AbsolutePath) -> [(Manifest, AbsolutePath)] {
         locateAllProjectManifestsArgs.append(at)
-        return locateAllProjectManifestsStubs ?? [(.project, at.appending(component: "Project.swift"))]
+        return locateProjectManifestsStubs ?? [(.project, at.appending(component: "Project.swift"))]
     }
 
     public func locateConfig(at: AbsolutePath) -> AbsolutePath? {

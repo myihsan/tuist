@@ -93,7 +93,7 @@ final class ProjectEditorTests: TuistUnitTestCase {
         manifestFilesLocator.locateDependenciesStub = dependenciesPath
         manifestFilesLocator.locateSetupStub = setupPath
         helpersDirectoryLocator.locateStub = helpersDirectory
-        projectEditorMapper.mapStub = (project, graph)
+        projectEditorMapper.mapStub = ([project], graph)
         var mappedProject: Project?
         projectMapper.mapStub = { project in
             mappedProject = project
@@ -133,7 +133,7 @@ final class ProjectEditorTests: TuistUnitTestCase {
         try FileHandler.shared.createFolder(helpersDirectory)
 
         resourceLocator.projectDescriptionStub = { projectDescriptionPath }
-        manifestFilesLocator.locateAllProjectManifestsStubs = []
+        manifestFilesLocator.locateProjectManifestsStubs = []
         helpersDirectoryLocator.locateStub = helpersDirectory
         projectEditorMapper.mapStub = (project, graph)
 

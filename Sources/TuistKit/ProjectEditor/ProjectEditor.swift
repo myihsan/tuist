@@ -91,46 +91,52 @@ final class ProjectEditor: ProjectEditing {
     func edit(at editingPath: AbsolutePath, in dstDirectory: AbsolutePath) throws -> AbsolutePath {
         let xcodeprojPath = dstDirectory.appending(component: "Manifests.xcodeproj")
 
-        let projectDesciptionPath = try resourceLocator.projectDescription()
-        let manifests = manifestFilesLocator.locateAllProjectManifests(at: editingPath)
+        let projectDescriptionPath = try resourceLocator.projectDescription()
+        let projectManifests = manifestFilesLocator.locateProjectManifests(at: editingPath)
+        let pluginManifests = manifestFilesLocator.locatePluginManifests(at: editingPath)
         let configPath = manifestFilesLocator.locateConfig(at: editingPath)
         let dependenciesPath = manifestFilesLocator.locateDependencies(at: editingPath)
         let setupPath = manifestFilesLocator.locateSetup(at: editingPath)
-        var helpers: [AbsolutePath] = []
-        if let helpersDirectory = helpersDirectoryLocator.locate(at: editingPath) {
-            helpers = FileHandler.shared.glob(helpersDirectory, glob: "**/*.swift")
-        }
-        var templates: [AbsolutePath] = []
-        if let templatesDirectory = templatesDirectoryLocator.locateUserTemplates(at: editingPath) {
-            templates = FileHandler.shared.glob(templatesDirectory, glob: "**/*.swift")
-                + FileHandler.shared.glob(templatesDirectory, glob: "**/*.stencil")
-        }
+
+        let helpers = helpersDirectoryLocator.locate(at: editingPath).map {
+            FileHandler.shared.glob($0, glob: "**/*.swift")
+        } ?? []
+
+        let templates = templatesDirectoryLocator.locateUserTemplates(at: editingPath).map {
+            FileHandler.shared.glob($0, glob: "**/*.swift") + FileHandler.shared.glob($0, glob: "**/*.stencil")
+        } ?? []
 
         /// We error if the user tries to edit a project in a directory where there are no editable files.
-        if manifests.isEmpty, helpers.isEmpty, templates.isEmpty {
+        if projectManifests.isEmpty, pluginManifests.isEmpty, helpers.isEmpty, templates.isEmpty {
             throw ProjectEditorError.noEditableFiles(editingPath)
         }
 
         // To be sure that we are using the same binary of Tuist that invoked `edit`
         let tuistPath = AbsolutePath(TuistCommand.processArguments()!.first!)
 
-        let (project, graph) = try projectEditorMapper.map(tuistPath: tuistPath,
-                                                           sourceRootPath: editingPath,
-                                                           xcodeProjPath: xcodeprojPath,
-                                                           setupPath: setupPath,
-                                                           configPath: configPath,
-                                                           dependenciesPath: dependenciesPath,
-                                                           manifests: manifests.map(\.1),
-                                                           helpers: helpers,
-                                                           templates: templates,
-                                                           projectDescriptionPath: projectDesciptionPath)
+        let (projects, graph) = try projectEditorMapper.map(
+            tuistPath: tuistPath,
+            sourceRootPath: editingPath,
+            xcodeProjPath: xcodeprojPath,
+            setupPath: setupPath,
+            configPath: configPath,
+            dependenciesPath: dependenciesPath,
+            projectManifests: projectManifests.map(\.1),
+            pluginManifests: pluginManifests,
+            helpers: helpers,
+            templates: templates,
+            projectDescriptionPath: projectDescriptionPath
+        )
 
-        let (mappedProject, sideEffects) = try projectMapper.map(project: project)
-        try sideEffectDescriptorExecutor.execute(sideEffects: sideEffects)
-        let valueGraph = ValueGraph(graph: graph)
-        let graphTraverser = ValueGraphTraverser(graph: valueGraph)
-        let descriptor = try generator.generateProject(project: mappedProject, graphTraverser: graphTraverser)
-        try writer.write(project: descriptor)
-        return descriptor.xcodeprojPath
+        for project in projects {
+            let (mappedProject, sideEffects) = try projectMapper.map(project: project)
+            try sideEffectDescriptorExecutor.execute(sideEffects: sideEffects)
+            let valueGraph = ValueGraph(graph: graph)
+            let graphTraverser = ValueGraphTraverser(graph: valueGraph)
+            let descriptor = try generator.generateProject(project: mappedProject, graphTraverser: graphTraverser)
+            try writer.write(project: descriptor)
+        }
+
+        return xcodeprojPath
     }
 }

@@ -3,10 +3,15 @@ import TSCBasic
 import TuistSupport
 
 public protocol RootDirectoryLocating {
-    /// Given a path, it finds the root directory by traversing up the hierarchy.
-    /// The root directory is considered the directory that contains a Tuist/ directory or the directory where the
-    /// git repository is defined if no Tuist/ directory is found.
-    /// - Parameter path: Path for which we'll look the root directory.
+
+    /// Given a path, returns the root directory by traversing up the hierarchy.
+    ///
+    /// The root directory is defined as having any of the following:
+    /// - a Tuist subdirectory
+    /// - a Plugin.swift manifest
+    /// - a git directory
+    ///
+    /// - Parameter path: the path to begin traversing upwards from to find the root directory.
     func locate(from path: AbsolutePath) -> AbsolutePath?
 }
 
@@ -15,24 +20,22 @@ public final class RootDirectoryLocator: RootDirectoryLocating {
     /// This cache avoids having to traverse the directories hierarchy every time the locate method is called.
     @Atomic private var cache: [AbsolutePath: AbsolutePath] = [:]
 
-    /// Constructor
     public init() {}
 
-    /// Given a path, it finds the root directory by traversing up the hierarchy.
-    /// The root directory is considered the directory that contains a Tuist/ directory or the directory where the
-    /// git repository is defined if no Tuist/ directory is found.
-    /// - Parameter path: Path for which we'll look the root directory.
     public func locate(from path: AbsolutePath) -> AbsolutePath? {
         locate(from: path, source: path)
     }
 
     private func locate(from path: AbsolutePath, source: AbsolutePath) -> AbsolutePath? {
-        if let cachedDirectory = cached(path: path) {
-            return cachedDirectory
-        } else if fileHandler.exists(path.appending(RelativePath(Constants.tuistDirectoryName))) {
+        if let cachedRoot = cached(path: path) {
+            return cachedRoot
+        } else if fileHandler.exists(path.appending(component: Constants.tuistDirectoryName)) {
             cache(rootDirectory: path, for: source)
             return path
-        } else if fileHandler.isFolder(path.appending(RelativePath(".git"))) {
+        } else if fileHandler.exists(path.appending(component: "Plugin.swift")) {
+            cache(rootDirectory: path, for: source)
+            return path
+        } else if fileHandler.isFolder(path.appending(component: ".git")) {
             cache(rootDirectory: path, for: source)
             return path
         } else if !path.isRoot {

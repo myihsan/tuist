@@ -29,7 +29,7 @@ final class ManifestFilesLocatorTests: TuistUnitTestCase {
         ])
 
         // When
-        let manifests = subject.locateAllProjectManifests(at: paths.first!)
+        let manifests = subject.locateProjectManifests(at: paths.first!)
 
         // Then
         XCTAssertEqual(manifests.count, 2)
@@ -48,7 +48,7 @@ final class ManifestFilesLocatorTests: TuistUnitTestCase {
         ])
 
         // When
-        let manifests = subject.locateAllProjectManifests(at: paths.first!)
+        let manifests = subject.locateProjectManifests(at: paths.first!)
 
         // Then
         XCTAssertEqual(manifests.first?.0, Manifest.project)

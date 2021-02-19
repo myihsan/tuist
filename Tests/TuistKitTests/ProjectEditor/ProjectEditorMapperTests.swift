@@ -27,7 +27,7 @@ final class ProjectEditorMapperTests: TuistUnitTestCase {
         // Given
         let sourceRootPath = try temporaryPath()
         let xcodeProjPath = sourceRootPath.appending(component: "Project.xcodeproj")
-        let manifestPaths = [sourceRootPath].map { $0.appending(component: "Project.swift") }
+        let projectManifestPaths = [sourceRootPath].map { $0.appending(component: "Project.swift") }
         let setupPath = sourceRootPath.appending(component: "Setup.swift")
         let configPath = sourceRootPath.appending(components: Constants.tuistDirectoryName, "Config.swift")
         let dependenciesPath = sourceRootPath.appending(components: Constants.tuistDirectoryName, "Dependencies.swift")
@@ -43,7 +43,8 @@ final class ProjectEditorMapperTests: TuistUnitTestCase {
                                                setupPath: setupPath,
                                                configPath: configPath,
                                                dependenciesPath: dependenciesPath,
-                                               manifests: manifestPaths,
+                                               projectManifests: projectManifestPaths,
+                                               pluginManifests: [],
                                                helpers: helperPaths,
                                                templates: templates,
                                                projectDescriptionPath: projectDescriptionPath)
@@ -61,7 +62,7 @@ final class ProjectEditorMapperTests: TuistUnitTestCase {
         XCTAssertEqual(manifestsTarget.platform, .macOS)
         XCTAssertEqual(manifestsTarget.product, .staticFramework)
         XCTAssertEqual(manifestsTarget.settings, expectedSettings(sourceRootPath: sourceRootPath))
-        XCTAssertEqual(manifestsTarget.sources.map(\.path), manifestPaths)
+        XCTAssertEqual(manifestsTarget.sources.map(\.path), projectManifestPaths)
         XCTAssertEqual(manifestsTarget.filesGroup, .group(name: "Manifests"))
         XCTAssertEqual(manifestsTarget.dependencies, [.target(name: "ProjectDescriptionHelpers")])
 
@@ -153,7 +154,7 @@ final class ProjectEditorMapperTests: TuistUnitTestCase {
         // Given
         let sourceRootPath = try temporaryPath()
         let xcodeProjPath = sourceRootPath.appending(component: "Project.xcodeproj")
-        let manifestPaths = [sourceRootPath].map { $0.appending(component: "Project.swift") }
+        let projectManifestPaths = [sourceRootPath].map { $0.appending(component: "Project.swift") }
         let helperPaths: [AbsolutePath] = []
         let templates: [AbsolutePath] = []
         let projectDescriptionPath = sourceRootPath.appending(component: "ProjectDescription.framework")
@@ -166,7 +167,8 @@ final class ProjectEditorMapperTests: TuistUnitTestCase {
                                                setupPath: nil,
                                                configPath: nil,
                                                dependenciesPath: nil,
-                                               manifests: manifestPaths,
+                                               projectManifests: projectManifestPaths,
+                                               pluginManifests: [],
                                                helpers: helperPaths,
                                                templates: templates,
                                                projectDescriptionPath: projectDescriptionPath)
@@ -184,7 +186,7 @@ final class ProjectEditorMapperTests: TuistUnitTestCase {
         XCTAssertEqual(manifestsTarget.platform, .macOS)
         XCTAssertEqual(manifestsTarget.product, .staticFramework)
         XCTAssertEqual(manifestsTarget.settings, expectedSettings(sourceRootPath: sourceRootPath))
-        XCTAssertEqual(manifestsTarget.sources.map(\.path), manifestPaths)
+        XCTAssertEqual(manifestsTarget.sources.map(\.path), projectManifestPaths)
         XCTAssertEqual(manifestsTarget.filesGroup, .group(name: "Manifests"))
         XCTAssertEmpty(manifestsTarget.dependencies)
 
@@ -220,7 +222,7 @@ final class ProjectEditorMapperTests: TuistUnitTestCase {
         let configPath = sourceRootPath.appending(components: Constants.tuistDirectoryName, "Config.swift")
         let dependenciesPath = sourceRootPath.appending(components: Constants.tuistDirectoryName, "Dependencies.swift")
         let otherProjectPath = "Module"
-        let manifestPaths = [
+        let projectManifestPaths = [
             sourceRootPath.appending(component: "Project.swift"),
             sourceRootPath.appending(component: otherProjectPath).appending(component: "Project.swift"),
         ]
@@ -236,7 +238,8 @@ final class ProjectEditorMapperTests: TuistUnitTestCase {
                                                setupPath: setupPath,
                                                configPath: configPath,
                                                dependenciesPath: dependenciesPath,
-                                               manifests: manifestPaths,
+                                               projectManifests: projectManifestPaths,
+                                               pluginManifests: [],
                                                helpers: helperPaths,
                                                templates: templates,
                                                projectDescriptionPath: projectDescriptionPath)
@@ -256,7 +259,7 @@ final class ProjectEditorMapperTests: TuistUnitTestCase {
         XCTAssertEqual(manifestOneTarget.platform, .macOS)
         XCTAssertEqual(manifestOneTarget.product, .staticFramework)
         XCTAssertEqual(manifestOneTarget.settings, expectedSettings(sourceRootPath: sourceRootPath))
-        XCTAssertEqual(manifestOneTarget.sources.map(\.path), [try XCTUnwrap(manifestPaths.last)])
+        XCTAssertEqual(manifestOneTarget.sources.map(\.path), [try XCTUnwrap(projectManifestPaths.last)])
         XCTAssertEqual(manifestOneTarget.filesGroup, .group(name: "Manifests"))
         XCTAssertEmpty(manifestOneTarget.dependencies)
 
@@ -267,7 +270,7 @@ final class ProjectEditorMapperTests: TuistUnitTestCase {
         XCTAssertEqual(manifestTwoTarget.platform, .macOS)
         XCTAssertEqual(manifestTwoTarget.product, .staticFramework)
         XCTAssertEqual(manifestTwoTarget.settings, expectedSettings(sourceRootPath: sourceRootPath))
-        XCTAssertEqual(manifestTwoTarget.sources.map(\.path), [try XCTUnwrap(manifestPaths.first)])
+        XCTAssertEqual(manifestTwoTarget.sources.map(\.path), [try XCTUnwrap(projectManifestPaths.first)])
         XCTAssertEqual(manifestTwoTarget.filesGroup, .group(name: "Manifests"))
         XCTAssertEmpty(manifestTwoTarget.dependencies)
 
