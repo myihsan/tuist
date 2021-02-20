@@ -114,7 +114,7 @@ final class ProjectEditor: ProjectEditing {
         // To be sure that we are using the same binary of Tuist that invoked `edit`
         let tuistPath = AbsolutePath(TuistCommand.processArguments()!.first!)
 
-        let (projects, graph) = try projectEditorMapper.map(
+        let projectGraph = try projectEditorMapper.map(
             tuistPath: tuistPath,
             sourceRootPath: editingPath,
             xcodeProjPath: xcodeprojPath,
@@ -128,14 +128,10 @@ final class ProjectEditor: ProjectEditing {
             projectDescriptionPath: projectDescriptionPath
         )
 
-        for project in projects {
-            let (mappedProject, sideEffects) = try projectMapper.map(project: project)
-            try sideEffectDescriptorExecutor.execute(sideEffects: sideEffects)
-            let valueGraph = ValueGraph(graph: graph)
-            let graphTraverser = ValueGraphTraverser(graph: valueGraph)
-            let descriptor = try generator.generateProject(project: mappedProject, graphTraverser: graphTraverser)
-            try writer.write(project: descriptor)
-        }
+        let valueGraph = ValueGraph(graph: projectGraph)
+        let graphTraverser = ValueGraphTraverser(graph: valueGraph)
+        let descriptor = try generator.generateWorkspace(graphTraverser: graphTraverser)
+        try writer.write(workspace: descriptor)
 
         return xcodeprojPath
     }

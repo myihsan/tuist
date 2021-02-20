@@ -2,6 +2,7 @@ import Foundation
 import TSCBasic
 import TuistCore
 import TuistGraph
+import TuistLoader
 import TuistSupport
 
 protocol ProjectEditorMapping: AnyObject {
@@ -17,7 +18,7 @@ protocol ProjectEditorMapping: AnyObject {
         helpers: [AbsolutePath],
         templates: [AbsolutePath],
         projectDescriptionPath: AbsolutePath
-    ) throws -> ([Project], Graph)
+    ) throws -> Graph
 }
 
 final class ProjectEditorMapper: ProjectEditorMapping {
@@ -25,6 +26,14 @@ final class ProjectEditorMapper: ProjectEditorMapping {
         let project: Project
         let targetNodes: [TargetNode]
         let dependencyNodes: [TargetNode]
+    }
+
+    private let manifestLoader: ManifestLoading
+
+    init(
+        manifestLoader: ManifestLoading = ManifestLoader()
+    ) {
+        self.manifestLoader = manifestLoader
     }
 
     func map(
@@ -39,7 +48,7 @@ final class ProjectEditorMapper: ProjectEditorMapping {
         helpers: [AbsolutePath],
         templates: [AbsolutePath],
         projectDescriptionPath: AbsolutePath
-    ) throws -> ([Project], Graph) {
+    ) throws -> Graph {
         let swiftVersion = try System.shared.swiftVersion()
         let targetSettings = Settings(
             base: settings(projectDescriptionPath: projectDescriptionPath, swiftVersion: swiftVersion),
@@ -86,7 +95,7 @@ final class ProjectEditorMapper: ProjectEditorMapping {
             pluginsProjectMapping.targetNodes +
             pluginsProjectMapping.dependencyNodes
 
-        let graph = Graph(
+        return Graph(
             name: "Manifests",
             entryPath: sourceRootPath,
             entryNodes: graphEntryNodes,
@@ -100,9 +109,6 @@ final class ProjectEditorMapper: ProjectEditorMapping {
             precompiled: [],
             targets: [sourceRootPath: graphTargets]
         )
-
-        // Project
-        return ([manifestsProjectMapping.project, pluginsProjectMapping.project], graph)
     }
 
     private func mapManifestsProject(
@@ -241,17 +247,19 @@ final class ProjectEditorMapper: ProjectEditorMapping {
         tuistPath: AbsolutePath
     ) -> ProjectMappingResult {
         let pluginsFilesGroup = ProjectGroup.group(name: "Plugins")
-        let pluginManifestTargets = namedManifests(pluginManifests).map { name, projectManifestSourcePath in
-            editorHelperTarget(
+
+        let pluginTargets = namedPlugins(pluginManifests).map { name, pluginManifestPath -> Target in
+            let helperPaths = FileHandler.shared.glob(pluginManifestPath.parentDirectory, glob: "**/*.swift")
+            return editorHelperTarget(
                 name: name,
                 filesGroup: pluginsFilesGroup,
                 targetSettings: targetSettings,
-                sourcePaths: [projectManifestSourcePath],
+                sourcePaths: [pluginManifestPath] + helperPaths,
                 dependencies: []
             )
         }
 
-        let targetReferences = pluginManifestTargets.map { TargetReference(projectPath: sourceRootPath, name: $0.name) }
+        let targetReferences = pluginTargets.map { TargetReference(projectPath: sourceRootPath, name: $0.name) }
         let buildAction = BuildAction(targets: targetReferences)
         let scheme = Scheme(name: "Plugins", shared: true, buildAction: buildAction, runAction: nil)
         let projectSettings = Settings(
@@ -272,19 +280,19 @@ final class ProjectEditorMapper: ProjectEditorMapping {
             developmentRegion: nil,
             settings: projectSettings,
             filesGroup: pluginsFilesGroup,
-            targets: pluginManifestTargets,
+            targets: pluginTargets,
             packages: [],
             schemes: [scheme],
             additionalFiles: []
         )
 
-        let pluginManifestTargetNodes = pluginManifestTargets.map {
+        let pluginTargetNodes = pluginTargets.map {
             TargetNode(project: pluginsProject, target: $0, dependencies: [])
         }
 
         return ProjectMappingResult(
             project: pluginsProject,
-            targetNodes: pluginManifestTargetNodes,
+            targetNodes: pluginTargetNodes,
             dependencyNodes: []
         )
     }
@@ -312,6 +320,23 @@ final class ProjectEditorMapper: ProjectEditorMapping {
                 name = "_\(name)"
             }
             result[name] = manifest
+        }
+    }
+
+    /// It returns a dictionary with plugin name as key and path to manifest as value.
+    /// - Parameter plugins: The list of plugin manifests
+    /// - Returns: Dictionary with plugin name as key and path to manifest as value.
+    private func namedPlugins(_ plugins: [AbsolutePath]) -> [String: AbsolutePath] {
+        plugins.reduce(into: [String: AbsolutePath]()) { result, pluginPath in
+            guard let pluginManifest = try? manifestLoader.loadPlugin(at: pluginPath.parentDirectory) else {
+                return
+            }
+
+            var name = pluginManifest.name
+            while result[name] != nil {
+                name = "_\(name)"
+            }
+            result[name] = pluginPath
         }
     }
 

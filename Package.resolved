@@ -51,8 +51,8 @@
         "repositoryURL": "https://github.com/krzyzanowskim/CryptoSwift.git",
         "state": {
           "branch": null,
-          "revision": "e2bc81be54d71d566a52ca17c3983d141c30aa70",
-          "version": "1.3.3"
+          "revision": "5669f222e46c8134fb1f399c745fa6882b43532e",
+          "version": "1.3.8"
         }
       },
       {
@@ -186,8 +186,8 @@
         "repositoryURL": "https://github.com/tuist/XcodeProj.git",
         "state": {
           "branch": null,
-          "revision": "82bf5efcaa27e94ed8c761c1eb3e397b6dea82b9",
-          "version": "7.18.0"
+          "revision": "c8afc799be95bbc6c329ba12d15342ffa7c4577d",
+          "version": "7.19.0"
         }
       },
       {
