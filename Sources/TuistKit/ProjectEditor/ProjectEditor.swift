@@ -89,8 +89,6 @@ final class ProjectEditor: ProjectEditing {
     }
 
     func edit(at editingPath: AbsolutePath, in dstDirectory: AbsolutePath) throws -> AbsolutePath {
-        let xcodeprojPath = dstDirectory.appending(component: "Manifests.xcodeproj")
-
         let projectDescriptionPath = try resourceLocator.projectDescription()
         let projectManifests = manifestFilesLocator.locateProjectManifests(at: editingPath)
         let pluginManifests = manifestFilesLocator.locatePluginManifests(at: editingPath)
@@ -114,10 +112,14 @@ final class ProjectEditor: ProjectEditing {
         // To be sure that we are using the same binary of Tuist that invoked `edit`
         let tuistPath = AbsolutePath(TuistCommand.processArguments()!.first!)
 
+        let workspaceName = "Manifests"
+        let workspacePath = dstDirectory.appending(component: "\(workspaceName).xcworkspace")
+
         let projectGraph = try projectEditorMapper.map(
+            name: workspaceName,
             tuistPath: tuistPath,
             sourceRootPath: editingPath,
-            xcodeProjPath: xcodeprojPath,
+            destinationDirectory: dstDirectory,
             setupPath: setupPath,
             configPath: configPath,
             dependenciesPath: dependenciesPath,
@@ -128,11 +130,10 @@ final class ProjectEditor: ProjectEditing {
             projectDescriptionPath: projectDescriptionPath
         )
 
-        let valueGraph = ValueGraph(graph: projectGraph)
-        let graphTraverser = ValueGraphTraverser(graph: valueGraph)
+        let graphTraverser = ValueGraphTraverser(graph: projectGraph)
         let descriptor = try generator.generateWorkspace(graphTraverser: graphTraverser)
         try writer.write(workspace: descriptor)
 
-        return xcodeprojPath
+        return workspacePath
     }
 }

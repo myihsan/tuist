@@ -8,7 +8,6 @@ public protocol RootDirectoryLocating {
     ///
     /// The root directory is defined as having any of the following:
     /// - a Tuist subdirectory
-    /// - a Plugin.swift manifest
     /// - a git directory
     ///
     /// - Parameter path: the path to begin traversing upwards from to find the root directory.
@@ -30,9 +29,6 @@ public final class RootDirectoryLocator: RootDirectoryLocating {
         if let cachedRoot = cached(path: path) {
             return cachedRoot
         } else if fileHandler.exists(path.appending(component: Constants.tuistDirectoryName)) {
-            cache(rootDirectory: path, for: source)
-            return path
-        } else if fileHandler.exists(path.appending(component: "Plugin.swift")) {
             cache(rootDirectory: path, for: source)
             return path
         } else if fileHandler.isFolder(path.appending(component: ".git")) {

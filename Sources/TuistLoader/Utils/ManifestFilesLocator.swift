@@ -12,7 +12,7 @@ public protocol ManifestFilesLocating: AnyObject {
     /// - Parameter locatingPath: Directory for which the **plugin** manifest files will be obtained.
     func locatePluginManifests(at locatingPath: AbsolutePath) -> [AbsolutePath]
 
-    /// It locates all project and workspace manifest files under the root project folder (as defined in `RootDirectoryLocating`).
+    /// It locates all project and workspace manifest files under the locating directory.
     /// - Parameter locatingPath: Directory for which the **project** and **workspace** manifest files will be obtained.
     func locateProjectManifests(at locatingPath: AbsolutePath) -> [(Manifest, AbsolutePath)]
 
@@ -30,12 +30,7 @@ public protocol ManifestFilesLocating: AnyObject {
 }
 
 public final class ManifestFilesLocator: ManifestFilesLocating {
-    /// Utility to locate the root directory of the project
-    let rootDirectoryLocator: RootDirectoryLocating
-
-    public init(rootDirectoryLocator: RootDirectoryLocating = RootDirectoryLocator()) {
-        self.rootDirectoryLocator = rootDirectoryLocator
-    }
+    public init() { }
 
     public func locateManifests(at locatingPath: AbsolutePath) -> [(Manifest, AbsolutePath)] {
         Manifest.allCases.compactMap { manifest in
@@ -50,9 +45,8 @@ public final class ManifestFilesLocator: ManifestFilesLocating {
     }
 
     public func locateProjectManifests(at locatingPath: AbsolutePath) -> [(Manifest, AbsolutePath)] {
-        guard let rootPath = rootDirectoryLocator.locate(from: locatingPath) else { return locateManifests(at: locatingPath) }
-        let projectsPaths = FileHandler.shared.glob(rootPath, glob: "**/\(Manifest.project.fileName(locatingPath))").map { (Manifest.project, $0) }
-        let workspacesPaths = FileHandler.shared.glob(rootPath, glob: "**/\(Manifest.workspace.fileName(locatingPath))").map { (Manifest.workspace, $0) }
+        let projectsPaths = FileHandler.shared.glob(locatingPath, glob: "**/\(Manifest.project.fileName(locatingPath))").map { (Manifest.project, $0) }
+        let workspacesPaths = FileHandler.shared.glob(locatingPath, glob: "**/\(Manifest.workspace.fileName(locatingPath))").map { (Manifest.workspace, $0) }
         return projectsPaths + workspacesPaths
     }
 

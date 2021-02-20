@@ -2,14 +2,14 @@ import Foundation
 import TSCBasic
 import TuistCore
 import TuistGraph
-import TuistLoader
 import TuistSupport
 
 protocol ProjectEditorMapping: AnyObject {
     func map(
+        name: String,
         tuistPath: AbsolutePath,
         sourceRootPath: AbsolutePath,
-        xcodeProjPath: AbsolutePath,
+        destinationDirectory: AbsolutePath,
         setupPath: AbsolutePath?,
         configPath: AbsolutePath?,
         dependenciesPath: AbsolutePath?,
@@ -18,28 +18,21 @@ protocol ProjectEditorMapping: AnyObject {
         helpers: [AbsolutePath],
         templates: [AbsolutePath],
         projectDescriptionPath: AbsolutePath
-    ) throws -> Graph
+    ) throws -> ValueGraph
 }
 
 final class ProjectEditorMapper: ProjectEditorMapping {
     private struct ProjectMappingResult {
         let project: Project
-        let targetNodes: [TargetNode]
-        let dependencyNodes: [TargetNode]
+        let targets: [Target]
+        let dependencies: [ValueGraphDependency]
     }
-
-    private let manifestLoader: ManifestLoading
-
-    init(
-        manifestLoader: ManifestLoading = ManifestLoader()
-    ) {
-        self.manifestLoader = manifestLoader
-    }
-
+    
     func map(
+        name: String,
         tuistPath: AbsolutePath,
         sourceRootPath: AbsolutePath,
-        xcodeProjPath: AbsolutePath,
+        destinationDirectory: AbsolutePath,
         setupPath: AbsolutePath?,
         configPath: AbsolutePath?,
         dependenciesPath: AbsolutePath?,
@@ -48,7 +41,7 @@ final class ProjectEditorMapper: ProjectEditorMapping {
         helpers: [AbsolutePath],
         templates: [AbsolutePath],
         projectDescriptionPath: AbsolutePath
-    ) throws -> Graph {
+    ) throws -> ValueGraph {
         let swiftVersion = try System.shared.swiftVersion()
         let targetSettings = Settings(
             base: settings(projectDescriptionPath: projectDescriptionPath, swiftVersion: swiftVersion),
@@ -56,11 +49,11 @@ final class ProjectEditorMapper: ProjectEditorMapping {
             defaultSettings: .recommended
         )
 
-        let manifestsProjectMapping = mapManifestsProject(
+        let projectsProjectMapping = mapProjectsProject(
             projectManifests: projectManifests,
             targetSettings: targetSettings,
             sourceRootPath: sourceRootPath,
-            xcodeProjPath: xcodeProjPath,
+            destinationDirectory: destinationDirectory,
             tuistPath: tuistPath,
             helpers: helpers,
             templates: templates,
@@ -73,73 +66,66 @@ final class ProjectEditorMapper: ProjectEditorMapping {
             pluginManifests: pluginManifests,
             targetSettings: targetSettings,
             sourceRootPath: sourceRootPath,
-            xcodeProjPath: xcodeProjPath,
+            destinationDirectory: destinationDirectory,
             tuistPath: tuistPath
         )
 
+        let projectMappings = [projectsProjectMapping, pluginsProjectMapping]
+            .compactMap { $0 }
+
         let workspace = Workspace(
             path: sourceRootPath,
-            xcWorkspacePath: sourceRootPath.appending(component: "Manifests.xcworkspace"),
-            name: "Manifests",
-            projects: [
-                manifestsProjectMapping.project.path,
-                pluginsProjectMapping.project.path
-            ]
+            xcWorkspacePath: destinationDirectory.appending(component: "\(name).xcworkspace"),
+            name: name,
+            projects: projectMappings.map(\.project.path)
         )
 
-        let graphEntryNodes = manifestsProjectMapping.targetNodes +
-            pluginsProjectMapping.targetNodes
+        let graphProjects = projectMappings
+            .map { ($0.project.path, $0.project) }
 
-        let graphTargets = manifestsProjectMapping.targetNodes +
-            manifestsProjectMapping.dependencyNodes +
-            pluginsProjectMapping.targetNodes +
-            pluginsProjectMapping.dependencyNodes
+        let graphTargets = projectMappings
+            .map { ($0.project.path, $0.targets) }
+            .map { path, targets in
+                (path, Dictionary(uniqueKeysWithValues: targets.map { ($0.name, $0) }))
+            }
 
-        return Graph(
-            name: "Manifests",
-            entryPath: sourceRootPath,
-            entryNodes: graphEntryNodes,
+        let graphDependencies = projectMappings
+            .flatMap { $0.dependencies }
+            .map { dependency -> (ValueGraphDependency, Set<ValueGraphDependency>) in (dependency, []) }
+
+        return ValueGraph(
+            name: name,
+            path: sourceRootPath,
             workspace: workspace,
-            projects: [
-                manifestsProjectMapping.project,
-                pluginsProjectMapping.project
-            ],
-            cocoapods: [],
-            packages: [],
-            precompiled: [],
-            targets: [sourceRootPath: graphTargets]
+            projects: Dictionary(uniqueKeysWithValues: graphProjects),
+            packages: [:],
+            targets: Dictionary(uniqueKeysWithValues: graphTargets),
+            dependencies: Dictionary(uniqueKeysWithValues: graphDependencies)
         )
     }
 
-    private func mapManifestsProject(
+    private func mapProjectsProject(
         projectManifests: [AbsolutePath],
         targetSettings: Settings,
         sourceRootPath: AbsolutePath,
-        xcodeProjPath: AbsolutePath,
+        destinationDirectory: AbsolutePath,
         tuistPath: AbsolutePath,
         helpers: [AbsolutePath],
         templates: [AbsolutePath],
         setupPath: AbsolutePath?,
         configPath: AbsolutePath?,
         dependenciesPath: AbsolutePath?
-    ) -> ProjectMappingResult {
-        let manifestsFilesGroup = ProjectGroup.group(name: "Manifests")
-        let projectManifestDependencies: [Dependency] = helpers.isEmpty ? [] : [.target(name: "ProjectDescriptionHelpers")]
+    ) -> ProjectMappingResult? {
+        guard !projectManifests.isEmpty else { return nil }
 
-        let projectManifestTargets = namedManifests(projectManifests).map { name, projectManifestSourcePath in
-            editorHelperTarget(
-                name: name,
-                filesGroup: manifestsFilesGroup,
-                targetSettings: targetSettings,
-                sourcePaths: [projectManifestSourcePath],
-                dependencies: projectManifestDependencies
-            )
-        }
+        let projectName = "Projects"
+        let projectPath = sourceRootPath.appending(component: projectName)
+        let manifestsFilesGroup = ProjectGroup.group(name: projectName)
 
         let helpersTarget: Target? = {
             guard !helpers.isEmpty else { return nil }
             return editorHelperTarget(
-                name: "ProjectDescriptionHelpers",
+                name: Constants.helpersDirectoryName,
                 filesGroup: manifestsFilesGroup,
                 targetSettings: targetSettings,
                 sourcePaths: helpers
@@ -149,7 +135,7 @@ final class ProjectEditorMapper: ProjectEditorMapping {
         let templatesTarget: Target? = {
             guard !templates.isEmpty else { return nil }
             return editorHelperTarget(
-                name: "Templates",
+                name: Constants.templatesDirectoryName,
                 filesGroup: manifestsFilesGroup,
                 targetSettings: targetSettings,
                 sourcePaths: templates
@@ -186,7 +172,7 @@ final class ProjectEditorMapper: ProjectEditorMapping {
             )
         }()
 
-        let optionalManifestProjectTargets = [
+        let optionalManifestTargets = [
             helpersTarget,
             templatesTarget,
             setupTarget,
@@ -194,12 +180,22 @@ final class ProjectEditorMapper: ProjectEditorMapping {
             dependenciesTarget
         ].compactMap { $0 }
 
-        let targets = projectManifestTargets + optionalManifestProjectTargets
-        let buildAction = BuildAction(targets: targets.map { TargetReference(projectPath: sourceRootPath, name: $0.name) })
+        let projectManifestTargets = namedProjects(projectManifests).map { name, projectManifestSourcePath -> Target in
+            let dependencies = helpersTarget.map { [Dependency.target(name: $0.name)] } ?? []
+            return editorHelperTarget(
+                name: name,
+                filesGroup: manifestsFilesGroup,
+                targetSettings: targetSettings,
+                sourcePaths: [projectManifestSourcePath],
+                dependencies: dependencies
+            )
+        }
+
+        let targets = projectManifestTargets + optionalManifestTargets
+        let buildAction = BuildAction(targets: targets.map { TargetReference(projectPath: projectPath, name: $0.name) })
         let arguments = Arguments(launchArguments: [LaunchArgument(name: "generate --path \(sourceRootPath)", isEnabled: true)])
         let runAction = RunAction(configurationName: "Debug", executable: nil, filePath: tuistPath, arguments: arguments, diagnosticsOptions: Set())
-        let scheme = Scheme(name: "Manifests", shared: true, buildAction: buildAction, runAction: runAction)
-
+        let scheme = Scheme(name: projectName, shared: true, buildAction: buildAction, runAction: runAction)
         let projectSettings = Settings(
             base: [
                 "ONLY_ACTIVE_ARCH": "NO",
@@ -210,10 +206,10 @@ final class ProjectEditorMapper: ProjectEditorMapping {
         )
 
         let manifestsProject = Project(
-            path: sourceRootPath,
+            path: projectPath,
             sourceRootPath: sourceRootPath,
-            xcodeProjPath: xcodeProjPath,
-            name: "Manifests",
+            xcodeProjPath: destinationDirectory.appending(component: "\(projectName).xcodeproj"),
+            name: projectName,
             organizationName: nil,
             developmentRegion: nil,
             settings: projectSettings,
@@ -224,18 +220,13 @@ final class ProjectEditorMapper: ProjectEditorMapping {
             additionalFiles: []
         )
 
-        let dependencyNodes = optionalManifestProjectTargets.map {
-            TargetNode(project: manifestsProject, target: $0, dependencies: [])
-        }
-
-        let projectManifestTargetNodes = projectManifestTargets.map {
-            TargetNode(project: manifestsProject, target: $0, dependencies: dependencyNodes)
-        }
+        let projectDependencies = optionalManifestTargets
+            .map { ValueGraphDependency.target(name: $0.name, path: projectPath) }
 
         return ProjectMappingResult(
             project: manifestsProject,
-            targetNodes: projectManifestTargetNodes,
-            dependencyNodes: dependencyNodes
+            targets: targets,
+            dependencies: projectDependencies
         )
     }
 
@@ -243,10 +234,14 @@ final class ProjectEditorMapper: ProjectEditorMapping {
         pluginManifests: [AbsolutePath],
         targetSettings: Settings,
         sourceRootPath: AbsolutePath,
-        xcodeProjPath: AbsolutePath,
+        destinationDirectory: AbsolutePath,
         tuistPath: AbsolutePath
-    ) -> ProjectMappingResult {
-        let pluginsFilesGroup = ProjectGroup.group(name: "Plugins")
+    ) -> ProjectMappingResult? {
+        guard !pluginManifests.isEmpty else { return nil }
+
+        let projectName = "Plugins"
+        let projectPath = sourceRootPath.appending(component: projectName)
+        let pluginsFilesGroup = ProjectGroup.group(name: projectName)
 
         let pluginTargets = namedPlugins(pluginManifests).map { name, pluginManifestPath -> Target in
             let helperPaths = FileHandler.shared.glob(pluginManifestPath.parentDirectory, glob: "**/*.swift")
@@ -259,9 +254,8 @@ final class ProjectEditorMapper: ProjectEditorMapping {
             )
         }
 
-        let targetReferences = pluginTargets.map { TargetReference(projectPath: sourceRootPath, name: $0.name) }
-        let buildAction = BuildAction(targets: targetReferences)
-        let scheme = Scheme(name: "Plugins", shared: true, buildAction: buildAction, runAction: nil)
+        let buildAction = BuildAction(targets: pluginTargets.map { TargetReference(projectPath: projectPath, name: $0.name) })
+        let scheme = Scheme(name: projectName, shared: true, buildAction: buildAction, runAction: nil)
         let projectSettings = Settings(
             base: [
                 "ONLY_ACTIVE_ARCH": "NO",
@@ -272,10 +266,10 @@ final class ProjectEditorMapper: ProjectEditorMapping {
         )
 
         let pluginsProject = Project(
-            path: sourceRootPath,
+            path: projectPath,
             sourceRootPath: sourceRootPath,
-            xcodeProjPath: xcodeProjPath,
-            name: "Plugins",
+            xcodeProjPath: destinationDirectory.appending(component: "\(projectName).xcodeproj"),
+            name: projectName,
             organizationName: nil,
             developmentRegion: nil,
             settings: projectSettings,
@@ -286,14 +280,10 @@ final class ProjectEditorMapper: ProjectEditorMapping {
             additionalFiles: []
         )
 
-        let pluginTargetNodes = pluginTargets.map {
-            TargetNode(project: pluginsProject, target: $0, dependencies: [])
-        }
-
         return ProjectMappingResult(
             project: pluginsProject,
-            targetNodes: pluginTargetNodes,
-            dependencyNodes: []
+            targets: pluginTargets,
+            dependencies: []
         )
     }
 
@@ -313,9 +303,9 @@ final class ProjectEditorMapper: ProjectEditorMapping {
     /// It returns a dictionary with unique name as key for each Manifest file
     /// - Parameter manifests: Manifest files to assign an unique name
     /// - Returns: Dictionary composed by unique name as key and Manifest file as value.
-    private func namedManifests(_ manifests: [AbsolutePath]) -> [String: AbsolutePath] {
+    private func namedProjects(_ manifests: [AbsolutePath]) -> [String: AbsolutePath] {
         manifests.reduce(into: [String: AbsolutePath]()) { result, manifest in
-            var name = "\(manifest.parentDirectory.basename)Manifests"
+            var name = "\(manifest.parentDirectory.basename)Project"
             while result[name] != nil {
                 name = "_\(name)"
             }
@@ -328,11 +318,7 @@ final class ProjectEditorMapper: ProjectEditorMapping {
     /// - Returns: Dictionary with plugin name as key and path to manifest as value.
     private func namedPlugins(_ plugins: [AbsolutePath]) -> [String: AbsolutePath] {
         plugins.reduce(into: [String: AbsolutePath]()) { result, pluginPath in
-            guard let pluginManifest = try? manifestLoader.loadPlugin(at: pluginPath.parentDirectory) else {
-                return
-            }
-
-            var name = pluginManifest.name
+            var name = "\(pluginPath.parentDirectory.basename)Plugin"
             while result[name] != nil {
                 name = "_\(name)"
             }

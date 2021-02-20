@@ -58,7 +58,7 @@ public final class PluginService: PluginServicing {
     private func fetchGitPlugin(at url: String, with gitId: String) throws -> AbsolutePath {
         let fingerprint = "\(url)-\(gitId)".md5
         let pluginDirectory = Environment.shared.cacheDirectory
-            .appending(RelativePath(Constants.PluginDirectory.name))
+            .appending(RelativePath(Constants.pluginsDirectoryName))
             .appending(RelativePath(fingerprint))
 
         guard !fileHandler.exists(pluginDirectory) else {
